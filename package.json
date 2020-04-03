@@ -1,0 +1,23 @@
+{
+  "name": "kintoneback-to-csv",
+  "version": "1.0.0",
+  "description": "",
+  "main": "backupAsCsv.js",
+  "dependencies": {
+    "@kintone/kintone-js-sdk": "^0.7.7",
+    "axios": "^0.19.2",
+    "fs": "0.0.1-security",
+    "log4js": "^6.1.2",
+    "mongoose": "^5.9.7",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "backup": "node backup.js"
+  },
+  "keywords": [
+    "kintone"
+  ],
+  "author": "slgu",
+  "license": "ISC"
+}
