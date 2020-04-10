@@ -1,68 +1,56 @@
 const kintoneModule = require("./kintone/modules");
+const config = require('./config');
 const mongoose = require('mongoose');
-const fileDir = "./kintoneBackup/files/";
-// const kintoneAppModel = require("./model/kintoneAppModel");
-var kintoneInfo = {
-    "domain": "devdemo2.cybozu.cn",
-    "username": "Administrator",
-    "password": "IN4LRlFVVa",
-    // "appids":[1292]
-}
-const mongodbUrl = "mongodb://localhost:27017/kintoneDemoDev";
+const utils = require("./utils/utils");
 const recordSchemaInstance = mongoose.Schema({
     appName: String,
     appId: String,
     records: Object,
     uploadFiles: Object
 });
+mongoose.connect(config.mongodb, { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
 
-mongoose.connect(mongodbUrl, { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
+const kintone = new kintoneModule(config.kintoneInfo);
+const kintoneApp = kintone.getAppModule();
+const kintoneFile = kintone.getFileModule();
+const kintoneRecord = kintone.getRecordModule();
 
-
-
-async function backup() {
-    const kintone = new kintoneModule(kintoneInfo);
-    const kintoneApp = kintone.getAppModule();
-
-    const kintoneFile = kintone.getFileModule();
-    const kintoneRecordCursor = kintone.getRecordCursorModule();
+async function backup() {  
+    let appids = utils.getArgv();
+    if (appids.length === 0) {
+        appids = config.backupAppids;
+    }
     const offset = 0;
     const limit = 100;
     let appInfos;
-    if (kintoneInfo.hasOwnProperty('appids')) {
-        appInfos = await kintoneApp.getAppsByIDs({ ids: kintoneInfo.appids, offset: offset, limit: limit });
-
+    if (appids.length > 0) {
+        let appsByIDs  = await kintoneApp.getAppsByIDs({ ids: appids, offset: offset, limit: limit });
+        appInfos = appsByIDs.apps;
     }
     else {
-        appInfos = await kintoneApp.getApps({ offset: offset, limit: limit });
+        appInfos = await fetchApps(offset, limit);
     }
 
     let Record = mongoose.model("record", recordSchemaInstance);
-
-
     let downloadPromise = [];
-    for (let appInfo of appInfos["apps"]) {
+    for (let appInfo of appInfos) {
         let appId = appInfo.appId;
         let appName = appInfo.name;
 
         const rcOption = {
             app: appId,
-            size: 100,
             query: "order by $id asc"
         }
-
-        var cursor = await kintoneRecordCursor.createCursor(rcOption);
-
-        var allrecords = await kintoneRecordCursor.getAllRecords({ id: cursor.id });
-        var newRecords = generateNewRecords(allrecords);
+        let allrecords = await kintoneRecord.getAllRecordsByCursor(rcOption);
+        let newRecords = generateNewRecords(allrecords);
         let fileList = newRecords[1];
         let fileNameList = [];
         for (let fileKey in fileList) {
             let params = {
                 fileKey: fileKey,
-                outPutFilePath: fileDir + fileKey
+                outPutFilePath: config.fileDir + fileKey
             };
-            downloadPromise.push (kintoneFile.download(params));
+            downloadPromise.push(kintoneFile.download(params));
             let fileInfo = {
                 fileKey: fileKey,
                 name: fileList[fileKey]
@@ -81,6 +69,21 @@ async function backup() {
     }
     await Promise.all([downloadPromise]);
     mongoose.disconnect();
+}
+
+function fetchApps(opt_offset, opt_limit, opt_allApps) {
+    let offset = opt_offset || 0;
+    let limit = opt_limit || 100;
+    let allApps = opt_allApps || [];
+
+    return kintoneApp.getApps({ offset: offset, limit: limit }).then(function (resp) {
+        let apps = resp.apps;
+        allApps = allApps.concat(apps);
+        if (apps.length === limit) {
+            return fetchApps(offset + limit, limit, allApps);
+        }
+        return allApps;
+    })
 }
 
 function generateNewRecords(records) {
@@ -125,6 +128,6 @@ function generateNewRecords(records) {
     return null;
 }
 
-backup().catch();
+backup();
 
 

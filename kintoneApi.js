@@ -1,23 +1,36 @@
 const axios = require('axios');
 const fs = require('fs');
-const config = require("./config");
 const logger = require("./utils/logger").logger;
 
 class kintoneApi {
-    constructor() {
-        this.preUrl = "https://" + config.domain;
-        let auth = new Buffer.from(config.username + ":" + config.password);
-        this.authbase64 = auth.toString('base64');
+    constructor(kintoneInfo) {
+        this.preUrl = "https://" + kintoneInfo.domain;
+        if (kintoneInfo.hasOwnProperty("apiToken")) {
+            this.apiToken = kintoneInfo.apiToken;
+        }
+        else {
+            let auth = new Buffer.from(kintoneInfo.username + ":" + kintoneInfo.password);
+            this.authbase64 = auth.toString('base64');
+        }
     }
 
     setRequestInfo(url, params, type) {
+        let headers;
+        if (this.apiToken) {
+            headers = {
+                'X-Cybozu-API-Token': this.apiToken
+            }
+        }
+        else {
+            headers = {
+                'X-Cybozu-Authorization': this.authbase64
+            }
+        }
         let options = {
             method: type,
             baseURL: this.preUrl,
             url: url,
-            headers: {
-                'X-Cybozu-Authorization': this.authbase64
-            }
+            headers: headers
         };
         if (type == "GET") {
             options.params = params;
@@ -170,7 +183,6 @@ class kintoneApi {
     }
 
     downloadFiles(dirpath, downloadUrlList) {
-        let auth = this.authbase64;
         downloadUrlList.forEach(
             fileInfo => {
                 let request = this.setRequestInfo(fileInfo.downloadUrl, '', "GET");
@@ -185,7 +197,7 @@ class kintoneApi {
                     const ws = fs.createWriteStream(dir);
                     rs.pipe(ws);
                 }).catch(e => {
-                    logger.error("downloadFiles:" + JSON.stringify(e));
+                    logger.error("downloadFiles:" + JSON.stringify(e.response.data));
                 });
             }
         )
@@ -207,8 +219,24 @@ class kintoneApi {
             query: { q: "" }
         };
         return axios(this.setRequestInfo(url, params, "POST")).then().catch(e => {
-            console.log(e);
-            // logger.error("getLastCsvCreateAt:" + JSON.stringify(e.response.data));
+            logger.error("deleteData:" + JSON.stringify(e.response.data));
+        });
+    }
+
+    updateUserInfo(userInfo) {
+        let url = "/v1/users.json";
+        let params = {
+            users: userInfo
+        };
+        return axios(this.setRequestInfo(url, params, "PUT")).then().catch(e => {
+            logger.error("updateUserInfo:" + JSON.stringify(e.response.data));
+        });
+    }
+
+    updateRecord(params) {
+        let url = "/k/v1/record.json";
+        return axios(this.setRequestInfo(url, params, "PUT")).then().catch(e => {
+            logger.error("updateRecord:" + JSON.stringify(e.response.data));
         });
     }
 }

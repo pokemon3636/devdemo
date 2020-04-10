@@ -2,69 +2,59 @@ const kintoneApi = require("./kintoneApi");
 const config = require("./config");
 const fs = require("fs");
 const path = require("path");
-const kintoneModule = require("./kintone/modules");
-const kintone = new kintoneApi();
-const dir = __dirname + '/kintoneBackup/files/';
 const mongoose = require('mongoose');
+const kintoneModule = require("./kintone/modules");
+const logger = require("./utils/logger").logger;
+const kintoneDemo = new kintoneApi(config.kintoneInfo);
+const utils = require("./utils/utils");
+
 const ExtraTypes = {
     "record": ["RECORD_NUMBER", "STATUS", "CATEGORY", "STATUS_ASSIGNEE", "CALC"]
 }
-mongoose.connect(config.mongodb, { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
 
-const recordSchemaInstance = mongoose.Schema({
-    appName: String,
-    appId: String,
-    records: Object,
-    uploadFiles: Object
-});
+const kintoneSDK = new kintoneModule(config.kintoneInfo);
+const kintoneApp = kintoneSDK.getAppModule();
+const kintoneRecord = kintoneSDK.getRecordModule();
 
-const kintoneRecordModel = mongoose.model('record', recordSchemaInstance);
-
-
-let userInfo = {
-    "username": config.username,
-    "password": config.password,
-    "domain": config.domain
-}
-const kintoneSDK = new kintoneModule(userInfo);
-async function getAppIdlist(limit, offset) {
-    let params = {
-        limit: 100,
-        offset: 0
-    };
-    const kintoneApp = kintoneSDK.getAppModule();
-    return kintoneApp.getApps(params);
-}
-
-function fetchApps(opt_offset, opt_limit, opt_allApps) {
-    let offset = opt_offset || 0;
-    let limit = opt_limit || 100;
-    let allApps = opt_allApps || [];
-    return getAppIdlist(limit, offset).then(function (resp) {
-        allApps = allApps.concat(resp);
-        if (resp.length === limit) {
-            return fetchApps(offset + limit, limit, allApps);
-        }
-        return allApps;
-    })
-}
-async function resetData() {
-    let apps = await getAppIdlist();
-    // console.log(apps);return;
-    if (!apps.hasOwnProperty("apps")) return;
-    // console.log(apps);
-    for (let app of apps['apps']) {
-        await kintone.deleteData(app['appId']);
+async function getApps() {
+    let appids = utils.getArgv();
+    if (appids.length === 0) {
+        appids = config.restoreAppids;
     }
-    setTimeout(async () => await restoreRecords(apps['apps']), 5000);
+    const offset = 0;
+    const limit = 100;
+    let appInfos;
+    if (appids.length > 0) {
+        let appsByIDs  = await kintoneApp.getAppsByIDs({ ids: appids, offset: offset, limit: limit });
+        appInfos = appsByIDs.apps;
+    }
+    else {
+        appInfos = await fetchApps(offset, limit);
+    }
+    return appInfos;
 }
 
-async function restoreRecords(apps) {
-    const kintoneRecord = kintoneSDK.getRecordModule();
+function deleteRecords(appInfos) {
+    var deleteList = [];
+    for (let app of appInfos) {
+        var deletePromise = kintoneDemo.deleteData(app['appId']);
+        deleteList.push(deletePromise);
+    }
+    return Promise.all(deleteList);
+}
 
-    for (let app of apps) {
-        // console.log(app.name);
+async function restoreRecords(appInfos) {
+    mongoose.connect(config.mongodb, { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
 
+    const recordSchemaInstance = mongoose.Schema({
+        appName: String,
+        appId: String,
+        records: Object,
+        uploadFiles: Object
+    });
+
+    const kintoneRecordModel = mongoose.model('record', recordSchemaInstance);
+    for (let app of appInfos) {
         let records = await kintoneRecordModel.findOne({ appName: app.name }).exec();
         if (records === null || records.records.length == 0) {
             continue;
@@ -79,10 +69,25 @@ async function restoreRecords(apps) {
             await kintoneRecord.addAllRecords({ app: app.appId, records: newRecords });
         }
         catch (err) {
-            // console.log(err);
+            logger.error("restoreRecords:" + JSON.stringify(err));
         }
     }
     mongoose.disconnect();
+}
+
+function fetchApps(opt_offset, opt_limit, opt_allApps) {
+    let offset = opt_offset || 0;
+    let limit = opt_limit || 100;
+    let allApps = opt_allApps || [];
+
+    return kintoneApp.getApps({ offset: offset, limit: limit }).then(function (resp) {
+        let apps = resp.apps;
+        allApps = allApps.concat(apps);
+        if (apps.length === limit) {
+            return fetchApps(offset + limit, limit, allApps);
+        }
+        return allApps;
+    })
 }
 
 async function uploadFiles(files) {
@@ -92,8 +97,8 @@ async function uploadFiles(files) {
         let fileNewName = fileInfo.name;
         let fileOldName = fileInfo.fileKey;
         const params = {
-            fileContent: fs.createReadStream(dir + fileOldName),
-            fileName: path.basename(dir + fileNewName)
+            fileContent: fs.createReadStream(config.fileDir + fileOldName),
+            fileName: path.basename(config.fileDir + fileNewName)
         };
         filekeyList[fileOldName] = await kintoneFile.upload(params);
     }
@@ -139,4 +144,10 @@ async function generateNewRecord(filekeyList, records) {
     }
     return records;
 }
-resetData();
+// resetData();
+exports.resetData = async function resetData() {
+    let appInfos = await getApps();
+    await deleteRecords(appInfos);
+    setTimeout(async () => await restoreRecords(appInfos), 10000);
+
+}
