@@ -25,11 +25,21 @@ async function getApps() {
     const limit = 100;
     let appInfos;
     if (appids.length > 0) {
-        let appsByIDs  = await kintoneApp.getAppsByIDs({ ids: appids, offset: offset, limit: limit });
+        let appsByIDs = await kintoneApp.getAppsByIDs({ ids: appids, offset: offset, limit: limit });
         appInfos = appsByIDs.apps;
     }
     else {
         appInfos = await fetchApps(offset, limit);
+    }
+    if (config.exceptAppid.length > 0) {
+        let exceptId = config.exceptAppid;
+        appInfos = appInfos.filter(function (appInfo) {
+            let appid = Number(appInfo.appId);
+            if (!exceptId.includes(appid)) {
+                return appInfo;
+            }
+        });
+
     }
     return appInfos;
 }
@@ -69,7 +79,7 @@ async function restoreRecords(appInfos) {
             await kintoneRecord.addAllRecords({ app: app.appId, records: newRecords });
         }
         catch (err) {
-            logger.error("restoreRecords:" + JSON.stringify(err));
+            logger.error("errorappid:" + app.appId + " restoreRecords:" + JSON.stringify(err));
         }
     }
     mongoose.disconnect();
@@ -144,7 +154,7 @@ async function generateNewRecord(filekeyList, records) {
     }
     return records;
 }
-// resetData();
+
 exports.resetData = async function resetData() {
     let appInfos = await getApps();
     await deleteRecords(appInfos);

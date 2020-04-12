@@ -13,5 +13,6 @@ module.exports = {
     mongodb: "mongodb://localhost:27017/kintoneDemoDev",
     fileDir: "./kintoneBackup/files/",
     backupAppids: [],
-    restoreAppids:  []
+    restoreAppids:  [],
+    exceptAppid:[171,172]
 };
