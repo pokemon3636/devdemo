@@ -13,7 +13,8 @@
   },
   "devDependencies": {},
   "scripts": {
-    "backup": "node backup.js"
+    "backup": "node backup.js",
+    "restore": "node resetData.js"
   },
   "keywords": [
     "kintone"

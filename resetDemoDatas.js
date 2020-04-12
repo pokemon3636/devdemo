@@ -158,6 +158,6 @@ async function generateNewRecord(filekeyList, records) {
 exports.resetData = async function resetData() {
     let appInfos = await getApps();
     await deleteRecords(appInfos);
-    setTimeout(async () => await restoreRecords(appInfos), 10000);
-
+    await utils.sleep(30000);
+    await restoreRecords(appInfos);
 }
