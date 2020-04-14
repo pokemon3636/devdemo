@@ -1,6 +1,6 @@
 module.exports = {
     kintoneInfo: {
-        domain: "devdemo2.cybozu.cn",
+        domain: "kintonedemo.cybozu.cn",
         username: "Administrator",
         password: "IN4LRlFVVa",
     },
