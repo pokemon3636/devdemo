@@ -1,13 +1,10 @@
 const config = require("./config");
 const kintoneApi = require("./kintoneApi");
-const resetDemoData = require("./resetDemoDatas");
 const utils = require("./utils/utils");
 const kintoneDemo = new kintoneApi(config.kintoneInfo);
 const kintoneKviewer = new kintoneApi(config.kintoneViewer);
 
-resetDemoData.resetData();
 let newpw = utils.createPassword();
-updateUserInfo().then(updateKviewData);
 
 function updateUserInfo() {
     let userInfo = [
@@ -32,5 +29,9 @@ function updateKviewData() {
         }
     }
     return kintoneKviewer.updateRecord(body);
+}
+
+exports.resetPassword = async function resetPassword() {
+    updateUserInfo().then(updateKviewData);
 }
 

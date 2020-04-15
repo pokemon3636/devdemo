@@ -155,7 +155,7 @@ async function generateNewRecord(filekeyList, records) {
     return records;
 }
 
-exports.resetData = async function resetData() {
+exports.resetDemoDatas = async function resetDemoDatas() {
     let appInfos = await getApps();
     await deleteRecords(appInfos);
     await utils.sleep(100000);
